@@ -14,7 +14,6 @@ import {
   Check,
   ChevronDown,
   Clock3,
-  Flame,
   Fish,
   Leaf,
   MapPin,
@@ -28,7 +27,6 @@ import {
   X,
 } from "lucide-react";
 import {
-  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -38,21 +36,33 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import ExperienceHub, { type ExperienceTheme } from "./ExperienceHub";
 import CulinaryStory from "./CulinaryStory";
-import { AudioExperience } from "./experience/audio";
+import { BentoCard, BentoGrid } from "./components/ui/BentoGrid";
+import { Magnetic } from "./components/ui/Magnetic";
+import { reservationService } from "./services/ReservationService";
+import type { Diet } from "./strategies/DietStrategy";
 
-type Diet = "nonveg" | "veg";
+const daylightEntrance =
+  "/images/generated/daylight-hsr-coastal-curry-entrance.webp";
+const nighttimeEntrance =
+  "/images/generated/nighttime-coastal-curry-restaurant-entrance.webp";
+
 type MenuCategory = "coastal" | "seafood" | "tandoor" | "breads";
+type ExperienceTheme = "morning" | "day" | "evening";
 
-const readDietPreference = (): Diet => {
+const readDietPreference = (): { diet: Diet; error?: string } => {
   try {
-    return window.localStorage.getItem("hsr-diet-preference") === "veg"
-      ? "veg"
-      : "nonveg";
-  } catch (error) {
-    console.warn("Diet preference could not be read.", error);
-    return "nonveg";
+    return {
+      diet:
+        window.localStorage.getItem("hsr-diet-preference") === "veg"
+          ? "veg"
+          : "nonveg",
+    };
+  } catch {
+    return {
+      diet: "nonveg",
+      error: "Your saved diet preference could not be read on this device.",
+    };
   }
 };
 
@@ -69,17 +79,6 @@ type Dish = {
 };
 
 const imageRoot = "/images/";
-const unsplashImageUrl = (source: string, width: number) => {
-  const url = new URL(source);
-  url.searchParams.set("auto", "format");
-  url.searchParams.set("fm", "webp");
-  url.searchParams.set("fit", "crop");
-  url.searchParams.set("crop", "entropy");
-  url.searchParams.set("w", String(width));
-  url.searchParams.set("h", String(width));
-  url.searchParams.set("q", "84");
-  return url.toString();
-};
 const restaurantPhone = "919632082153";
 const restaurantAddress =
   "172, 9th Main Rd, 7th Sector, HSR Layout, Bengaluru, Karnataka 560102";
@@ -103,7 +102,7 @@ const dishes: Dish[] = [
     diet: "nonveg",
     description:
       "Fresh prawns, Byadagi chilli, pure ghee and tamarind, roasted into a fiery Mangalorean classic.",
-    image: "https://images.unsplash.com/photo-1781332143666-5d02f0fe7865",
+    image: "generated/rustic-spicy-prawn-masala.webp",
     imageAlt: "Shrimp curry in a metal kadai on a wooden platter",
     spice: 3,
     tag: "A coastal original",
@@ -115,6 +114,8 @@ const dishes: Dish[] = [
     diet: "nonveg",
     description:
       "Slow-roasted chicken wrapped in the deep, dark warmth of roasted coastal masala.",
+    image: "generated/rustic-spiced-chicken-curry-bowl.webp",
+    imageAlt: "Spiced chicken curry served in a rustic bowl",
     spice: 3,
     tag: "Slow roasted",
   },
@@ -125,7 +126,7 @@ const dishes: Dish[] = [
     diet: "veg",
     description:
       "Lacy, paper-thin unfermented rice crepes made for gathering every last bit of gravy.",
-    image: "neer-dosa-user.webp",
+    image: "generated/rustic-south-indian-crepes-with-chutneys.webp",
     imageAlt: "Neer dosa served with coastal accompaniments",
     spice: 0,
     tag: "Soft & lacy",
@@ -137,7 +138,7 @@ const dishes: Dish[] = [
     diet: "nonveg",
     description:
       "Crisp dry rice wafers with a generous pour of rich, coconut-based chicken curry.",
-    image: "kori-roti-user.webp",
+    image: "generated/chicken-and-roti.webp",
     imageAlt: "Kori roti served with chicken curry",
     spice: 2,
     tag: "Coastal comfort",
@@ -149,7 +150,7 @@ const dishes: Dish[] = [
     diet: "veg",
     description:
       "A vegetable medley finished in warming roasted spice and the fragrance of ghee.",
-    image: "coastal-veg-ghee-roast-user.webp",
+    image: "generated/mixed-vegetable-dish.webp",
     imageAlt: "Coastal vegetable ghee roast",
     spice: 2,
     tag: "Vegetarian",
@@ -161,6 +162,8 @@ const dishes: Dish[] = [
     diet: "nonveg",
     description:
       "Whole pomfret marinated with yoghurt and tandoori spices, then char-grilled.",
+    image: "generated/whole-fish-platter.webp",
+    imageAlt: "Whole grilled fish served with coastal accompaniments",
     spice: 2,
     tag: "From the tandoor",
   },
@@ -171,6 +174,8 @@ const dishes: Dish[] = [
     diet: "nonveg",
     description:
       "A semolina-crusted pomfret, pan-fried for a crisp outside and tender centre.",
+    image: "generated/fish-on-banana-leaf.webp",
+    imageAlt: "Fried fish served on a banana leaf",
     spice: 2,
     tag: "Crisp & coastal",
   },
@@ -181,7 +186,7 @@ const dishes: Dish[] = [
     diet: "nonveg",
     description:
       "A traditional, tangy coastal curry with pomfret and a warmly spiced gravy.",
-    image: "south-indian-fish-curry.jpg",
+    image: "generated/fish-curry-platter.webp",
     imageAlt: "South Indian fish curry",
     spice: 2,
     tag: "Tamarind warmth",
@@ -193,6 +198,8 @@ const dishes: Dish[] = [
     diet: "nonveg",
     description:
       "Mackerel seasoned with coastal spices, coated in semolina and shallow-fried.",
+    image: "generated/fish-platter-with-garnish.webp",
+    imageAlt: "Golden fried fish with coastal garnishes",
     spice: 2,
     tag: "Semolina crust",
   },
@@ -203,7 +210,7 @@ const dishes: Dish[] = [
     diet: "nonveg",
     description:
       "Catch of the day in tangy tamarind-coconut gravy, served with steamed rice.",
-    image: "fish-curry-combo-user.webp",
+    image: "generated/south-indian-banana-leaf-feast.webp",
     imageAlt: "Fish curry served with steamed rice",
     spice: 2,
     tag: "Catch of the day",
@@ -215,6 +222,8 @@ const dishes: Dish[] = [
     diet: "nonveg",
     description:
       "Three chicken drumsticks seasoned with warming spices and roasted in a clay tandoor.",
+    image: "generated/tandoori-chicken-platter.webp",
+    imageAlt: "Tandoori chicken platter",
     spice: 2,
     tag: "Three pieces",
   },
@@ -225,7 +234,7 @@ const dishes: Dish[] = [
     diet: "nonveg",
     description:
       "Classic red-spiced chicken, marinated and roasted in the clay oven.",
-    image: "tandoori-chicken-mb41.jpg",
+    image: "generated/tandoori-chicken-roast.webp",
     imageAlt: "Tandoori chicken roasted in a clay oven",
     spice: 2,
     tag: "Clay oven",
@@ -237,6 +246,8 @@ const dishes: Dish[] = [
     diet: "nonveg",
     description:
       "Minced chicken skewers seasoned with a fragrant blend of warm spices.",
+    image: "generated/green-herb-kebabs.webp",
+    imageAlt: "Green herb chicken kebabs",
     spice: 1,
     tag: "Tandoor fired",
   },
@@ -298,48 +309,6 @@ const reviews = [
 
 const assetCredits = [
   {
-    file: "ghee-roasted-prawns.jpg",
-    title: "Ghee Roasted Prawns",
-    creator: "Charles Haynes",
-    license: "CC BY-SA 2.0",
-    url: "https://www.flickr.com/photos/87232391@N00/2202932059",
-  },
-  {
-    file: "tandoori-chicken-mb41.jpg",
-    title: "Tandoori chicken-MB41",
-    creator: "Rajeeb Dutta",
-    license: "CC BY-SA 4.0",
-    url: "https://commons.wikimedia.org/wiki/File:Tandoori_chicken-MB41.jpg",
-  },
-  {
-    file: "south-indian-fish-curry.jpg",
-    title: "South Indian Fish Curry",
-    creator: "Shreya Shetty",
-    license: "CC BY-SA 4.0",
-    url: "https://commons.wikimedia.org/wiki/File:South_Indian_Fish_Curry.JPG",
-  },
-  {
-    file: "spicy-red-fish-curry.jpg",
-    title: "Spicy Red Fish Curry",
-    creator: "Mathew Jibin",
-    license: "CC BY-SA 4.0",
-    url: "https://commons.wikimedia.org/wiki/File:Spicy_Red_Fish_Curry.jpg",
-  },
-  {
-    file: "a-plate-of-south-indian-masala-dosa.jpg",
-    title: "A plate of South Indian Masala Dosa",
-    creator: "Billjones94",
-    license: "CC BY-SA 4.0",
-    url: "https://commons.wikimedia.org/wiki/File:A_plate_of_South_Indian_Masala_Dosa.jpg",
-  },
-  {
-    file: "masala-dosa-01.jpg",
-    title: "Masala dosa 01",
-    creator: "Marajozkee",
-    license: "CC BY-SA 4.0",
-    url: "https://commons.wikimedia.org/wiki/File:Masala_dosa_01.jpg",
-  },
-  {
     file: "cottage-cheese-in-spinach-gravy-palak-paneer.jpg",
     title: "Cottage cheese in spinach gravy (palak paneer)",
     creator: "Radhikamprabhu82",
@@ -347,24 +316,10 @@ const assetCredits = [
     url: "https://commons.wikimedia.org/wiki/File:Cottage_cheese_in_spinach_gravy(palak_paneer).jpg",
   },
   {
-    file: "photos-of-mangalore-mangaluru-karnataka-india-2024.jpg",
-    title: "Jetty at the coastal city of Mangaluru",
-    creator: "Fredericknoronha",
-    license: "CC BY-SA 4.0",
-    url: "https://commons.wikimedia.org/wiki/File:Photos_of_Mangalore_(Mangaluru),_Karnataka,_India._2024_October_07Jetty_at_the_coastal_city.jpg",
-  },
-  {
-    file: "Remote WebP, optimized through the Unsplash CDN",
-    title: "Shrimp curry in a metal bowl surrounded by fresh vegetables",
-    creator: "Zayed Ahmed Zadu",
-    license: "Unsplash License",
-    url: "https://unsplash.com/photos/JcJ5k21tiA0",
-  },
-  {
-    file: "neer-dosa-user.webp",
-    title: "Neer Dosa",
-    creator: "Not specified (user-provided image)",
-    license: "Usage rights not specified",
+    file: "AI-generated food and restaurant illustrations",
+    title: "Generated food and restaurant concept imagery",
+    creator: "User-provided generated assets",
+    license: "Illustrative only; not restaurant photography",
   },
   {
     file: "coastal-veg-ghee-roast-user.webp",
@@ -378,21 +333,11 @@ const assetCredits = [
     creator: "Not specified (user-provided image)",
     license: "Usage rights not specified",
   },
-  {
-    file: "fish-curry-combo-user.webp",
-    title: "Fish Curry Combo",
-    creator: "Not specified (user-provided image)",
-    license: "Usage rights not specified",
-  },
-  {
-    file: "kori-roti-user.webp",
-    title: "Kori Roti with Chicken Gassy",
-    creator: "Not specified (user-provided image)",
-    license: "Usage rights not specified",
-  },
 ];
 
 const getDish = (id: string) => dishes.find((dish) => dish.id === id)!;
+const hasGeneratedDishImage = (dish: Dish) =>
+  dish.image?.startsWith("generated/") ?? false;
 
 function CoastMark({ className = "" }: { className?: string }) {
   return (
@@ -411,6 +356,43 @@ function CoastMark({ className = "" }: { className?: string }) {
       />
       <circle cx="22" cy="22" r="4.4" stroke="currentColor" />
     </svg>
+  );
+}
+
+function EntrancePhoto({
+  placement,
+  timeTheme,
+}: {
+  placement: "story" | "visit";
+  timeTheme: ExperienceTheme;
+}) {
+  return (
+    <figure
+      aria-label="AI-generated daylight and evening concepts for a restaurant entrance; not actual restaurant photos"
+      className={`entrance-photo entrance-photo--${placement}`}
+      data-time-theme={timeTheme}
+    >
+      <img
+        alt=""
+        aria-hidden="true"
+        className="entrance-photo__day"
+        decoding="async"
+        loading="lazy"
+        src={daylightEntrance}
+      />
+      <img
+        alt=""
+        aria-hidden="true"
+        className="entrance-photo__night"
+        decoding="async"
+        loading="lazy"
+        src={nighttimeEntrance}
+      />
+      <figcaption>
+        HSR Coastal Curry
+        <span>AI-generated exterior concept, not an actual restaurant photo</span>
+      </figcaption>
+    </figure>
   );
 }
 
@@ -496,49 +478,31 @@ function DishPicture({
   dish,
   className = "",
   eager = false,
-  sizes,
 }: {
   dish: Dish;
   className?: string;
   eager?: boolean;
-  sizes?: string;
 }) {
   if (!dish.image) {
     return <PlateIllustration label={dish.name} />;
   }
 
   const imageSource = dish.image;
-  const isUnsplashImage = imageSource.startsWith(
-    "https://images.unsplash.com/",
-  );
+  const isGeneratedImage = hasGeneratedDishImage(dish);
 
   return (
     <img
-      alt={`${dish.imageAlt ?? dish.name} reference photograph; illustrative, not from the restaurant`}
-      className={`${className}${eager && isUnsplashImage ? " dish-picture--hero" : ""}`}
+      alt={
+        isGeneratedImage
+          ? `AI-generated illustration of ${dish.imageAlt ?? dish.name}; not a photograph of a dish served by the restaurant`
+          : `${dish.imageAlt ?? dish.name} reference photograph; illustrative, not from the restaurant`
+      }
+      className={className}
       decoding="async"
+      draggable={false}
       fetchPriority={eager ? "high" : "auto"}
       loading={eager ? "eager" : "lazy"}
-      sizes={
-        sizes ??
-        (eager
-          ? "(min-width: 1280px) 366px, (min-width: 768px) 38vw, 72vw"
-          : "(min-width: 1000px) 280px, (min-width: 700px) 40vw, 90vw")
-      }
-      src={
-        isUnsplashImage
-          ? unsplashImageUrl(imageSource, 768)
-          : `${imageRoot}${imageSource}`
-      }
-      srcSet={
-        isUnsplashImage
-          ? [480, 768, 1200]
-              .map(
-                (width) => `${unsplashImageUrl(imageSource, width)} ${width}w`,
-              )
-              .join(", ")
-          : undefined
-      }
+      src={`${imageRoot}${imageSource}`}
     />
   );
 }
@@ -580,7 +544,7 @@ function WhatsAppLink({
       className={className}
       href={`https://wa.me/${restaurantPhone}?text=${encodeURIComponent(message)}`}
       onClick={onClick}
-      rel="noreferrer"
+      rel="noopener noreferrer"
       target="_blank"
     >
       {children}
@@ -589,7 +553,8 @@ function WhatsAppLink({
 }
 
 function App() {
-  const [diet, setDiet] = useState<Diet>(readDietPreference);
+  const [storedPreference] = useState(readDietPreference);
+  const [diet, setDiet] = useState<Diet>(storedPreference.diet);
   const [category, setCategory] = useState<MenuCategory>("coastal");
   const [selectedHero, setSelectedHero] = useState(0);
   const [reservationOpen, setReservationOpen] = useState(false);
@@ -600,10 +565,13 @@ function App() {
   const [guestCount, setGuestCount] = useState(2);
   const [reservationDate, setReservationDate] = useState("");
   const [reservationDiet, setReservationDiet] = useState<Diet>("nonveg");
+  const [reservationReady, setReservationReady] = useState(false);
+  const [reservationError, setReservationError] = useState("");
   const [orderCounts, setOrderCounts] = useState<Record<string, number>>({});
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState(storedPreference.error ?? "");
+  const [toastError, setToastError] = useState(Boolean(storedPreference.error));
   const [localTime, setLocalTime] = useState("");
-  const [timeTheme, setTimeTheme] = useState<ExperienceTheme>(() => {
+  const [timeTheme] = useState<ExperienceTheme>(() => {
     const hour = new Date().getHours();
     return hour >= 5 && hour < 12
       ? "morning"
@@ -611,28 +579,46 @@ function App() {
         ? "day"
         : "evening";
   });
-  const [soundEnabled, setSoundEnabled] = useState(false);
-  const [soundVolume, setSoundVolume] = useState(0.35);
   const [garnishes, setGarnishes] = useState(initialGarnishes);
   const prefersReducedMotion = useReducedMotion();
+  const springTransition = prefersReducedMotion
+    ? { duration: 0 }
+    : { type: "spring" as const, bounce: 0, duration: 0.38 };
+  const surfaceTransition = prefersReducedMotion
+    ? {
+        opacity: { duration: 0.14, ease: "easeOut" as const },
+        scale: { duration: 0.14, ease: "easeOut" as const },
+        x: { duration: 0 },
+        y: { duration: 0 },
+      }
+    : springTransition;
+  const fadeTransition = prefersReducedMotion
+    ? { duration: 0.14, ease: "easeOut" as const }
+    : springTransition;
   const pillLayoutTransition = prefersReducedMotion
     ? { layout: { duration: 0 } }
-    : {
-        layout: {
-          duration: 0.24,
-          ease: [0.23, 1, 0.32, 1] as const,
-        },
-      };
-  const tiltX = useSpring(0, { stiffness: 88, damping: 16 });
-  const tiltY = useSpring(0, { stiffness: 88, damping: 16 });
-  const glintX = useSpring(0, { stiffness: 88, damping: 16 });
-  const glintY = useSpring(0, { stiffness: 88, damping: 16 });
+    : { layout: { type: "spring" as const, bounce: 0, duration: 0.38 } };
+  const tiltX = useSpring(0, { stiffness: 180, damping: 28 });
+  const tiltY = useSpring(0, { stiffness: 180, damping: 28 });
+  const glintX = useSpring(0, { stiffness: 180, damping: 28 });
+  const glintY = useSpring(0, { stiffness: 180, damping: 28 });
   const dialogHeading = useRef<HTMLHeadingElement>(null);
-  const audioExperience = useRef<AudioExperience | null>(null);
+  const mobileNavToggle = useRef<HTMLButtonElement>(null);
   const totalInOrder = Object.values(orderCounts).reduce(
     (sum, count) => sum + count,
     0,
   );
+  const hasCoastalRoast =
+    Boolean(orderCounts["prawn-ghee-roast"]) ||
+    Boolean(orderCounts["coastal-veg-ghee-roast"]);
+  const hasNeerDosa = Boolean(orderCounts["neer-dosa"]);
+  const tableStatus = hasCoastalRoast
+    ? hasNeerDosa
+      ? "Coastal ritual complete"
+      : "Add Neer Dosa to complete"
+    : totalInOrder > 0
+      ? "Ready for the table"
+      : "Build your table";
   const currentHeroDishes = useMemo(
     () => heroDishIds[diet].map(getDish),
     [diet],
@@ -645,16 +631,22 @@ function App() {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
+  const isNotFound =
+    window.location.pathname !== "/" &&
+    window.location.pathname !== "/index.html";
 
   useEffect(() => {
-    return () => audioExperience.current?.dispose();
-  }, []);
+    document.title = isNotFound
+      ? "Page not found | HSR Coastal Curry"
+      : "HSR Coastal Curry | Mangalorean dining in HSR Layout";
+  }, [isNotFound]);
 
   useEffect(() => {
     try {
       window.localStorage.setItem("hsr-diet-preference", diet);
-    } catch (error) {
-      console.warn("Diet preference could not be saved.", error);
+    } catch {
+      setToastError(true);
+      setToast("Your diet preference could not be saved on this device.");
     }
   }, [diet]);
 
@@ -702,7 +694,14 @@ function App() {
         }
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
+        const dialogHeading = dialog.querySelector<HTMLElement>(
+          '[tabindex="-1"]',
+        );
+        if (
+          event.shiftKey &&
+          (document.activeElement === first ||
+            document.activeElement === dialogHeading)
+        ) {
           event.preventDefault();
           last.focus();
         } else if (!event.shiftKey && document.activeElement === last) {
@@ -741,35 +740,14 @@ function App() {
       ...current,
       [dish.id]: (current[dish.id] ?? 0) + 1,
     }));
-    setToast(`${dish.name} added to your order`);
-    if (soundEnabled) audioExperience.current?.playInteraction();
-  };
-
-  const updateSoundPreference = async (enabled: boolean) => {
-    if (!enabled) {
-      audioExperience.current?.disable();
-      setSoundEnabled(false);
-      return;
-    }
-
-    audioExperience.current ??= new AudioExperience();
-    try {
-      await audioExperience.current.enable();
-      setSoundEnabled(true);
-    } catch (error) {
-      console.error("Optional audio could not be enabled.", error);
-      setSoundEnabled(false);
-      setToast("Optional audio could not start. Check your browser settings.");
-    }
-  };
-
-  const updateTimeTheme = useCallback((theme: ExperienceTheme) => {
-    setTimeTheme(theme);
-  }, []);
-
-  const updateSoundVolume = (volume: number) => {
-    setSoundVolume(volume);
-    audioExperience.current?.setVolume(volume);
+    const pairingHint =
+      (dish.id === "prawn-ghee-roast" ||
+        dish.id === "coastal-veg-ghee-roast") &&
+      !hasNeerDosa
+        ? " Pair with lacy Neer Dosa to complete the coastal ritual."
+        : "";
+    setToastError(false);
+    setToast(`${dish.name} added to your order.${pairingHint}`);
   };
 
   const changeQuantity = (id: string, amount: number) => {
@@ -792,15 +770,19 @@ function App() {
     .map(([id, count]) => `${count} × ${getDish(id).name}`)
     .join("\n");
 
+  const reservationDraft = { date: reservationDate, guests: guestCount, diet: reservationDiet } as const;
+  const reservationMessage = reservationService.createWhatsAppMessage(reservationDraft);
+
   const submitReservation = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const message = `Hello, I would like to ask about a table at HSR Coastal Curry.\nDate: ${reservationDate}\nGuests: ${guestCount}\nPreference: ${reservationDiet === "veg" ? "Pure vegetarian" : "Non-vegetarian"}\nPlease confirm availability and timings.`;
-    window.open(
-      `https://wa.me/${restaurantPhone}?text=${encodeURIComponent(message)}`,
-      "_blank",
-      "noopener,noreferrer",
-    );
-    setReservationOpen(false);
+    const validation = reservationService.validate(reservationDraft, todayIso);
+    if (!validation.valid) {
+      setReservationError(validation.message);
+      setReservationReady(false);
+      return;
+    }
+    setReservationError("");
+    setReservationReady(true);
   };
 
   const selectNextHero = (direction: number) => {
@@ -885,17 +867,37 @@ function App() {
   };
 
   const closeMobileNav = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key === "Escape") setMobileNavOpen(false);
+    if (event.key === "Escape") {
+      setMobileNavOpen(false);
+      mobileNavToggle.current?.focus();
+    }
   };
 
   const navLinks = [
-    { href: "#experience", label: "Experience" },
-    { href: "#menu", label: "Signature menu" },
     { href: "#coastal-story", label: "Coastal story" },
-    { href: "#taste-guide", label: "Taste guide" },
+    { href: "#menu", label: "Signature menu" },
+    { href: "#experience", label: "Experience" },
     { href: "#reviews", label: "Reviews" },
     { href: "#visit", label: "Location" },
   ];
+
+  if (isNotFound) {
+    return (
+      <main className="not-found">
+        <CoastMark className="not-found__mark" />
+        <p>HSR Coastal Curry</p>
+        <h1>This page wandered off.</h1>
+        <span>
+          That address does not lead to a page on our menu. Let&apos;s get you
+          back to the table.
+        </span>
+        <a className="button button--gold" href="/">
+          Back to the home page
+          <ArrowUpRight aria-hidden="true" size={16} />
+        </a>
+      </main>
+    );
+  }
 
   return (
     <div
@@ -903,6 +905,9 @@ function App() {
       data-mode={diet}
       data-time-theme={timeTheme}
     >
+      <a className="skip-link" href="#top">
+        Skip to content
+      </a>
       <header className="site-header">
         <a
           aria-label="HSR Coastal Curry home"
@@ -919,9 +924,11 @@ function App() {
 
         <button
           aria-expanded={mobileNavOpen}
+          aria-controls="primary-navigation"
           aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
           className="mobile-nav-toggle"
           onClick={() => setMobileNavOpen((open) => !open)}
+          ref={mobileNavToggle}
           type="button"
         >
           {mobileNavOpen ? <X size={20} /> : <ChevronDown size={20} />}
@@ -930,6 +937,7 @@ function App() {
         <nav
           aria-label="Main navigation"
           className={`primary-nav${mobileNavOpen ? " is-open" : ""}`}
+          id="primary-navigation"
           onKeyDown={closeMobileNav}
         >
           {navLinks.map((link) => (
@@ -998,6 +1006,7 @@ function App() {
           className="hero-section"
           id="platter"
         >
+          <div aria-hidden="true" className="hero-aura" />
           <div className="hero-copy">
             <p className="hero-proof">
               <span aria-label="Rated 4.4 out of 5">
@@ -1011,11 +1020,9 @@ function App() {
             </p>
 
             <h1 id="hero-title">
-              Authentic coastal
+              Coastal food
               <br />
-              flavors in the
-              <br />
-              <em>heart of HSR.</em>
+              in HSR.
             </h1>
             <p className="hero-description">
               From fiery Byadagi Prawn Ghee Roast to lacy Neer Dosa—experience
@@ -1023,26 +1030,30 @@ function App() {
             </p>
 
             <div className="hero-actions">
-              <button
-                className="button button--gold"
-                onClick={() => setReservationOpen(true)}
-                type="button"
-              >
-                Reserve a table
-                <ArrowUpRight aria-hidden="true" size={16} />
-              </button>
-              <button
-                className="button button--quiet"
-                onClick={() => setOrderOpen(true)}
-                type="button"
-              >
-                <ShoppingBag aria-hidden="true" size={16} />
-                Order online
-              </button>
+              <Magnetic>
+                <button
+                  className="button button--gold"
+                  onClick={() => setReservationOpen(true)}
+                  type="button"
+                >
+                  Reserve a table
+                  <ArrowUpRight aria-hidden="true" size={16} />
+                </button>
+              </Magnetic>
+              <Magnetic strength={0.08}>
+                <button
+                  className="button button--quiet"
+                  onClick={() => setOrderOpen(true)}
+                  type="button"
+                >
+                  <ShoppingBag aria-hidden="true" size={16} />
+                  Order online
+                </button>
+              </Magnetic>
             </div>
 
-            <a className="hero-scroll" href="#menu">
-              <span>Explore the 3D menu</span>
+            <a className="hero-scroll" href="#coastal-story">
+              <span>Scroll to unlayer the roast</span>
               <ArrowDown aria-hidden="true" size={15} />
             </a>
           </div>
@@ -1056,21 +1067,20 @@ function App() {
               animate={{ rotate: platterRotation }}
               className="platter-field"
               drag="x"
-              dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={0.12}
+              dragConstraints={{ left: -36, right: 36 }}
+              dragElastic={0.55}
               dragSnapToOrigin
               onPointerLeave={resetPlatterLighting}
               onPointerMove={movePlatterLighting}
               onDragEnd={(_, info) => {
-                if (Math.abs(info.offset.x) > 35) {
-                  selectNextHero(info.offset.x < 0 ? 1 : -1);
+                const projectedX =
+                  info.offset.x +
+                  (info.velocity.x / 1000) * (0.998 / (1 - 0.998));
+                if (Math.abs(projectedX) > 80) {
+                  selectNextHero(projectedX < 0 ? 1 : -1);
                 }
               }}
-              transition={
-                prefersReducedMotion
-                  ? { duration: 0 }
-                  : { type: "spring", stiffness: 88, damping: 16 }
-              }
+              transition={springTransition}
               style={{ rotateX: tiltX, rotateY: tiltY }}
               aria-describedby="platter-instructions"
               aria-label="Featured dish platter"
@@ -1083,22 +1093,14 @@ function App() {
                 <motion.span
                   animate={{ rotate: -platterRotation }}
                   className="plate-label plate-label--top"
-                  transition={
-                    prefersReducedMotion
-                      ? { duration: 0 }
-                      : { type: "spring", stiffness: 88, damping: 16 }
-                  }
+                  transition={springTransition}
                 >
                   HSR · 172
                 </motion.span>
                 <motion.span
                   animate={{ rotate: -platterRotation }}
                   className="plate-label plate-label--bottom"
-                  transition={
-                    prefersReducedMotion
-                      ? { duration: 0 }
-                      : { type: "spring", stiffness: 88, damping: 16 }
-                  }
+                  transition={springTransition}
                 >
                   COASTAL TABLE
                 </motion.span>
@@ -1107,17 +1109,9 @@ function App() {
                 <motion.div
                   animate={{ rotate: -platterRotation }}
                   className="featured-dish__image"
-                  transition={
-                    prefersReducedMotion
-                      ? { duration: 0 }
-                      : { type: "spring", stiffness: 88, damping: 16 }
-                  }
+                  transition={springTransition}
                 >
-                  <DishPicture
-                    dish={featuredDish}
-                    eager
-                    sizes="(min-width: 1280px) 468px, (min-width: 768px) 45vw, 72vw"
-                  />
+                  <DishPicture dish={featuredDish} eager />
                 </motion.div>
                 <motion.span
                   aria-hidden="true"
@@ -1145,15 +1139,11 @@ function App() {
                     setGarnishes(initialGarnishes);
                   }}
                   onPointerDown={(event) => event.stopPropagation()}
-                  transition={
-                    prefersReducedMotion
-                      ? { duration: 0 }
-                      : { type: "spring", stiffness: 88, damping: 16 }
-                  }
+                  transition={springTransition}
                   type="button"
                 >
                   <span className="orbit-node__thumbnail">
-                    <DishPicture dish={dish} sizes="36px" />
+                    <DishPicture dish={dish} />
                   </span>
                   <span className="orbit-node__label">{dish.name}</span>
                 </motion.button>
@@ -1217,14 +1207,6 @@ function App() {
 
             <div aria-live="polite" className="platter-info">
               <div>
-                <span className="platter-info__mode">
-                  {diet === "veg" ? (
-                    <Leaf aria-hidden="true" size={14} />
-                  ) : (
-                    <Flame aria-hidden="true" size={14} />
-                  )}
-                  {diet === "veg" ? "From the garden" : "From the coast"}
-                </span>
                 <h2>{featuredDish.name}</h2>
                 <p>{featuredDish.tag}</p>
               </div>
@@ -1248,7 +1230,9 @@ function App() {
               </div>
             </div>
             <p className="hero-image-note">
-              Reference food photography; plated service may differ.
+              {hasGeneratedDishImage(featuredDish)
+                ? "AI-generated food illustration; not restaurant photography."
+                : "Reference food photography; plated service may differ."}
               <button
                 onClick={() => setPreviewDish(featuredDish)}
                 type="button"
@@ -1272,65 +1256,18 @@ function App() {
           </div>
         </section>
 
-        <section
-          aria-labelledby="experience-title"
-          className="story-section"
-          id="experience"
-        >
-          <div className="story-copy">
-            <h2 id="experience-title">
-              A coastal table,
-              <br />
-              <em>right around the corner.</em>
-            </h2>
-            <p>
-              There is a particular comfort in ghee, roasted chilli and the
-              people you share them with. At 172, that coastal feeling finds a
-              home in Sector 7—with Mangalorean favourites, generous gravies and
-              room to linger.
-            </p>
-            <a className="text-link" href="#menu">
-              Come hungry
-              <ArrowRight aria-hidden="true" size={16} />
-            </a>
-          </div>
-          <figure className="coast-photo">
-            <img
-              alt="A fishing jetty on the coast of Mangaluru, Karnataka"
-              decoding="async"
-              loading="lazy"
-              src={`${imageRoot}photos-of-mangalore-mangaluru-karnataka-india-2024.jpg`}
-            />
-            <figcaption>
-              Mangaluru, Karnataka
-              <span>Coastal reference photograph</span>
-            </figcaption>
-          </figure>
-        </section>
-
-        <CulinaryStory />
-
-        <ExperienceHub
+        <CulinaryStory
           diet={diet}
-          dishes={dishes}
-          onAddToOrder={(dish) => addToOrder(getDish(dish.id))}
-          onSound={() => {
-            if (soundEnabled) audioExperience.current?.playInteraction();
-          }}
-          onSoundEnabledChange={(enabled) => {
-            void updateSoundPreference(enabled);
-          }}
-          onSoundVolumeChange={updateSoundVolume}
-          onThemeChange={updateTimeTheme}
-          soundEnabled={soundEnabled}
-          soundVolume={soundVolume}
+          onAddToOrder={() =>
+            addToOrder(
+              getDish(
+                diet === "veg" ? "coastal-veg-ghee-roast" : "prawn-ghee-roast",
+              ),
+            )
+          }
         />
 
-        <section
-          aria-labelledby="menu-title"
-          className="menu-section"
-          id="menu"
-        >
+        <section aria-labelledby="menu-title" className="menu-section" id="menu">
           <div className="menu-header">
             <div>
               <h2 id="menu-title">
@@ -1382,12 +1319,14 @@ function App() {
           <motion.div
             animate={{ opacity: 1, y: 0 }}
             className="dish-grid"
-            initial={{ opacity: 0, y: 16 }}
+            initial={
+              prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 16 }
+            }
             key={`${diet}-${category}`}
             transition={
               prefersReducedMotion
-                ? { duration: 0 }
-                : { duration: 0.3, ease: [0.22, 1, 0.36, 1] }
+                ? fadeTransition
+                : { type: "spring", bounce: 0, duration: 0.38 }
             }
           >
             {menuForCategory.map((dish, index) => (
@@ -1397,6 +1336,11 @@ function App() {
               >
                 <div className="dish-card__visual">
                   <DishPicture dish={dish} />
+                  {hasGeneratedDishImage(dish) && (
+                    <span className="dish-card__image-note">
+                      Generated illustration
+                    </span>
+                  )}
                   <span
                     className={`dish-diet-mark dish-diet-mark--${dish.diet}`}
                   >
@@ -1454,6 +1398,31 @@ function App() {
         </section>
 
         <section
+          aria-labelledby="experience-title"
+          className="story-section"
+          id="experience"
+        >
+          <div className="story-copy">
+            <h2 id="experience-title">
+              A coastal table,
+              <br />
+              close to home.
+            </h2>
+            <p>
+              There is a particular comfort in ghee, roasted chilli and the
+              people you share them with. At 172, that coastal feeling finds a
+              home in Sector 7—with Mangalorean favourites, generous gravies and
+              room to linger.
+            </p>
+            <a className="text-link" href="#menu">
+              Come hungry
+              <ArrowRight aria-hidden="true" size={16} />
+            </a>
+          </div>
+          <EntrancePhoto placement="story" timeTheme={timeTheme} />
+        </section>
+
+        <section
           aria-labelledby="hospitality-title"
           className="hospitality-section"
         >
@@ -1468,8 +1437,8 @@ function App() {
               home.
             </p>
           </div>
-          <div className="hospitality-list">
-            <article className="hospitality-item">
+          <BentoGrid className="hospitality-list">
+            <BentoCard className="hospitality-item">
               <span className="service-icon">
                 <UtensilsCrossed size={20} />
               </span>
@@ -1478,8 +1447,8 @@ function App() {
                 <p>A pleasant interior and warm, attentive hospitality.</p>
               </div>
               <span className="service-note">Come in</span>
-            </article>
-            <article className="hospitality-item">
+            </BentoCard>
+            <BentoCard className="hospitality-item">
               <span className="service-icon">
                 <ShoppingBag size={20} />
               </span>
@@ -1490,8 +1459,8 @@ function App() {
               <a className="service-note" href={`tel:+${restaurantPhone}`}>
                 Call to collect
               </a>
-            </article>
-            <article className="hospitality-item">
+            </BentoCard>
+            <BentoCard className="hospitality-item">
               <span className="service-icon">
                 <Navigation size={20} />
               </span>
@@ -1502,8 +1471,8 @@ function App() {
               <a className="service-note" href={`tel:+${restaurantPhone}`}>
                 Check delivery
               </a>
-            </article>
-            <article className="hospitality-item">
+            </BentoCard>
+            <BentoCard className="hospitality-item">
               <span className="service-icon">
                 <CalendarDays size={20} />
               </span>
@@ -1520,8 +1489,8 @@ function App() {
               >
                 Find a table
               </button>
-            </article>
-          </div>
+            </BentoCard>
+          </BentoGrid>
         </section>
 
         <section
@@ -1532,9 +1501,9 @@ function App() {
           <div className="review-heading">
             <div>
               <h2 id="review-title">
-                Good food
+                Good
                 <br />
-                <em>travels by word.</em>
+                words.
               </h2>
             </div>
             <a
@@ -1621,6 +1590,8 @@ function App() {
               <br />A little coastal warmth, close to home.
             </p>
           </div>
+
+          <EntrancePhoto placement="visit" timeTheme={timeTheme} />
 
           <div className="visit-grid">
             <div className="visit-map-card">
@@ -1758,11 +1729,11 @@ function App() {
         </div>
         <div className="footer-credits">
           <p>
-            Dish and Mangaluru reference photographs are illustrative, not
-            restaurant photography. User-provided image creators and usage
-            rights have not been independently verified; confirm permission
-            before publication. Other cropped display images are attributed to
-            their original creators.
+            Generated food and restaurant visuals are illustrative, not photos
+            of dishes, staff, or spaces at the restaurant. User-provided image
+            creators and usage rights have not been independently verified;
+            confirm permission before publication. Other reference images are
+            attributed to their original creators.
           </p>
           <details className="image-credit-list">
             <summary>
@@ -1786,20 +1757,23 @@ function App() {
           </details>
         </div>
         <div className="footer-bottom">
-          <span>© HSR Coastal Curry</span>
+          <span>© {new Date().getFullYear()} HSR Coastal Curry</span>
           <span>Made with warmth in Bengaluru</span>
           <a href="#top">Back to the top ↑</a>
         </div>
       </footer>
 
       <button
-        aria-label={`Open order, ${totalInOrder} ${totalInOrder === 1 ? "item" : "items"}`}
+        aria-label={`Open order, ${totalInOrder} ${totalInOrder === 1 ? "item" : "items"}. ${tableStatus}`}
         className={`order-fab${totalInOrder > 0 ? " has-items" : ""}`}
         onClick={() => setOrderOpen(true)}
         type="button"
       >
         <ShoppingBag aria-hidden="true" size={17} />
-        <span>Your order</span>
+        <span className="order-fab__label">
+          Your table
+          <small>{tableStatus}</small>
+        </span>
         {totalInOrder > 0 && <strong>{totalInOrder}</strong>}
       </button>
 
@@ -1811,18 +1785,26 @@ function App() {
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
             onClick={() => setReservationOpen(false)}
+            transition={fadeTransition}
           >
             <motion.section
               aria-labelledby="reservation-title"
               aria-modal="true"
+              animate={{ opacity: 1, y: 0, scale: 1 }}
               className="booking-dialog"
+              exit={
+                prefersReducedMotion
+                  ? { opacity: 0 }
+                  : { opacity: 0, y: 18, scale: 0.98 }
+              }
               initial={
                 prefersReducedMotion
-                  ? false
+                  ? { opacity: 0, y: 0, scale: 1 }
                   : { opacity: 0, y: 18, scale: 0.98 }
               }
               onClick={(event) => event.stopPropagation()}
               role="dialog"
+              transition={surfaceTransition}
             >
               <div className="dialog-heading">
                 <div>
@@ -1852,7 +1834,11 @@ function App() {
                       aria-label="Reservation date"
                       min={todayIso}
                       onChange={(event) =>
-                        setReservationDate(event.target.value)
+                        {
+                          setReservationDate(event.target.value);
+                          setReservationError("");
+                          setReservationReady(false);
+                        }
                       }
                       required
                       type="date"
@@ -1866,7 +1852,11 @@ function App() {
                     aria-label="Remove one guest"
                     disabled={guestCount <= 1}
                     onClick={() =>
-                      setGuestCount((count) => Math.max(1, count - 1))
+                      {
+                        setReservationReady(false);
+                        setReservationError("");
+                        setGuestCount((count) => Math.max(1, count - 1));
+                      }
                     }
                     type="button"
                   >
@@ -1879,7 +1869,11 @@ function App() {
                     aria-label="Add one guest"
                     disabled={guestCount >= 20}
                     onClick={() =>
-                      setGuestCount((count) => Math.min(20, count + 1))
+                      {
+                        setReservationReady(false);
+                        setReservationError("");
+                        setGuestCount((count) => Math.min(20, count + 1));
+                      }
                     }
                     type="button"
                   >
@@ -1896,7 +1890,11 @@ function App() {
                           reservationDiet === option ? "is-selected" : ""
                         }
                         key={option}
-                        onClick={() => setReservationDiet(option)}
+                        onClick={() => {
+                          setReservationReady(false);
+                          setReservationError("");
+                          setReservationDiet(option);
+                        }}
                         type="button"
                       >
                         {option === "veg" ? (
@@ -1909,13 +1907,43 @@ function App() {
                     ))}
                   </div>
                 </fieldset>
-                <button
-                  className="button button--gold booking-submit"
-                  type="submit"
-                >
-                  Continue on WhatsApp
-                  <ArrowUpRight aria-hidden="true" size={16} />
-                </button>
+                {reservationReady ? (
+                  <>
+                    <p className="reservation-ready" role="status">
+                      Your request is ready. Send it in WhatsApp; your table
+                      isn&apos;t reserved until the restaurant confirms.
+                    </p>
+                    <WhatsAppLink
+                      className="button button--gold booking-submit"
+                      message={reservationMessage}
+                    >
+                      Open WhatsApp to send
+                      <ArrowUpRight aria-hidden="true" size={16} />
+                    </WhatsAppLink>
+                    <button
+                      className="reservation-edit"
+                      onClick={() => setReservationReady(false)}
+                      type="button"
+                    >
+                      Edit reservation details
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {reservationError && (
+                      <p className="form-error" role="alert">
+                        {reservationError}
+                      </p>
+                    )}
+                    <button
+                      className="button button--gold booking-submit"
+                      type="submit"
+                    >
+                      Prepare WhatsApp request
+                      <ArrowUpRight aria-hidden="true" size={16} />
+                    </button>
+                  </>
+                )}
                 <p className="form-footnote">
                   Your request isn&apos;t a confirmed booking. We&apos;ll reply
                   directly to confirm availability.
@@ -1934,14 +1962,30 @@ function App() {
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
             onClick={() => setOrderOpen(false)}
+            transition={fadeTransition}
           >
             <motion.aside
               aria-labelledby="order-title"
               aria-modal="true"
               className="order-dialog"
-              initial={prefersReducedMotion ? false : { opacity: 0, x: 30 }}
+              animate={{ opacity: 1, x: 0, y: 0 }}
+              exit={
+                prefersReducedMotion
+                  ? { opacity: 0 }
+                  : window.innerWidth <= 680
+                    ? { opacity: 0, y: 30 }
+                    : { opacity: 0, x: 30 }
+              }
+              initial={
+                prefersReducedMotion
+                  ? { opacity: 0, x: 0, y: 0 }
+                  : window.innerWidth <= 680
+                    ? { opacity: 0, y: 30 }
+                    : { opacity: 0, x: 30 }
+              }
               onClick={(event) => event.stopPropagation()}
               role="dialog"
+              transition={surfaceTransition}
             >
               <div className="dialog-heading">
                 <div>
@@ -2061,14 +2105,26 @@ function App() {
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
             onClick={() => setKitchenOpen(false)}
+            transition={fadeTransition}
           >
             <motion.section
               aria-labelledby="kitchen-note-title"
               aria-modal="true"
+              animate={{ opacity: 1, y: 0, scale: 1 }}
               className="experience-dialog"
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 18 }}
+              exit={
+                prefersReducedMotion
+                  ? { opacity: 0 }
+                  : { opacity: 0, y: 18, scale: 0.98 }
+              }
+              initial={
+                prefersReducedMotion
+                  ? { opacity: 0, y: 0, scale: 1 }
+                  : { opacity: 0, y: 18, scale: 0.98 }
+              }
               onClick={(event) => event.stopPropagation()}
               role="dialog"
+              transition={surfaceTransition}
             >
               <div className="dialog-heading">
                 <div>
@@ -2118,14 +2174,26 @@ function App() {
             exit={{ opacity: 0 }}
             initial={{ opacity: 0 }}
             onClick={() => setPreviewDish(null)}
+            transition={fadeTransition}
           >
             <motion.section
               aria-labelledby="dish-preview-title"
               aria-modal="true"
+              animate={{ opacity: 1, y: 0, scale: 1 }}
               className="experience-dialog experience-dialog--preview"
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 18 }}
+              exit={
+                prefersReducedMotion
+                  ? { opacity: 0 }
+                  : { opacity: 0, y: 18, scale: 0.98 }
+              }
+              initial={
+                prefersReducedMotion
+                  ? { opacity: 0, y: 0, scale: 1 }
+                  : { opacity: 0, y: 18, scale: 0.98 }
+              }
               onClick={(event) => event.stopPropagation()}
               role="dialog"
+              transition={surfaceTransition}
             >
               <div className="dialog-heading">
                 <div>
@@ -2143,16 +2211,15 @@ function App() {
                 </button>
               </div>
               <div className="dish-preview-image">
-                <DishPicture
-                  dish={previewDish}
-                  eager
-                  sizes="(min-width: 600px) 420px, 88vw"
-                />
+                <DishPicture dish={previewDish} eager />
               </div>
               <p className="dialog-description">
-                This is a flat reference photo, not a 3D model or an AR
-                placement. No optimized dish model is available, so this preview
-                will not request camera access.
+                This is a flat{" "}
+                {hasGeneratedDishImage(previewDish)
+                  ? "AI-generated illustration"
+                  : "reference photo"}
+                , not a 3D model or AR placement. No optimized dish model is
+                available, so this preview will not request camera access.
               </p>
               <button
                 className="button button--gold"
@@ -2174,21 +2241,32 @@ function App() {
         {toast && (
           <motion.p
             animate={{ opacity: 1, y: 0 }}
-            aria-live="polite"
-            className="order-toast"
-            exit={{ opacity: 0, y: 10 }}
-            initial={{ opacity: 0, y: 10 }}
+            className={`order-toast${toastError ? " order-toast--error" : ""}`}
+            exit={
+              prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10 }
+            }
+            initial={
+              prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 10 }
+            }
+            role={toastError ? "alert" : "status"}
+            transition={fadeTransition}
           >
-            <Check aria-hidden="true" size={15} />
+            {toastError ? (
+              <X aria-hidden="true" size={15} />
+            ) : (
+              <Check aria-hidden="true" size={15} />
+            )}
             {toast}
-            <button
-              aria-label="View your order"
-              onClick={() => setOrderOpen(true)}
-              type="button"
-            >
-              View
-              <ArrowRight aria-hidden="true" size={14} />
-            </button>
+            {!toastError && (
+              <button
+                aria-label="View your order"
+                onClick={() => setOrderOpen(true)}
+                type="button"
+              >
+                View
+                <ArrowRight aria-hidden="true" size={14} />
+              </button>
+            )}
           </motion.p>
         )}
       </AnimatePresence>

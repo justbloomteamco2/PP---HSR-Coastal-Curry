@@ -32,7 +32,8 @@ The restaurant serves Mangalorean and coastal Indian cooking in HSR Layout, with
 - The website may link reservation and ordering requests to the supplied phone number; no booking, ordering, or payment backend was supplied.
 - Per-dish prices, opening time, reservation availability, delivery-provider details, and parking arrangements have not been supplied and must not be presented as confirmed facts.
 - No optimized 3D dish models or authorized kitchen footage were supplied. Dish preview and kitchen-camera actions must use truthful static fallbacks until approved assets are available.
-- Five dish photographs were provided for the website; the original creators and usage rights were not specified and must be confirmed before publication.
+- Generated food and restaurant concept images are included in `src/Gen/` and `public/images/generated/`; they are illustrative assets, not photographs of the restaurant's dishes, staff, or premises.
+- User-provided image creators and usage rights have not been independently verified; confirm permission before publication.
 
 ## Brand Commitments
 
@@ -45,6 +46,7 @@ The restaurant serves Mangalorean and coastal Indian cooking in HSR Layout, with
 - Menu descriptions, price range, location and contact details, opening-time statement, and three review quotations with reviewer names were supplied in the project brief.
 - The restaurant's rating and review count were supplied as 4.4/5 and 211 reviews.
 - Publicly licensed reference images and their attribution records are in `public/images/` and `public/images/credits.json`. They are not photographs of the restaurant's own dishes or premises.
+- No authorized restaurant photography or kitchen footage was supplied. The Gen2 food video is generated and illustrative, not documentary footage.
 - A user-initiated weather lookup may use the visitor's browser location with the Open-Meteo public API; location access is optional and weather must never block menu access.
 - No per-dish prices, reservation inventory, delivery integration, or first-party restaurant photography was supplied.
 
